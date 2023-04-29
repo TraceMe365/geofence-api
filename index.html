@@ -11,11 +11,42 @@
     </script>
     <!-- JQuery -->
     <script src="https://code.jquery.com/jquery-3.6.1.min.js"></script>
-    <!-- Jsonta -->
+    <!-- JSONata -->
     <script src="https://cdn.jsdelivr.net/npm/jsonata@1.8.5/jsonata.min.js"></script>
     <!-- Datatables -->
     <link href="https://cdn.datatables.net/v/bs5/dt-1.13.4/datatables.min.css" rel="stylesheet" />
     <script src="https://cdn.datatables.net/v/bs5/dt-1.13.4/datatables.min.js"></script>
+    <style>
+        #loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #fff;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        }
+
+        .spinner {
+        border: 8px solid rgba(0, 0, 0, 0.1);
+        border-top-color: #555;
+        border-radius: 50%;
+        width: 48px;
+        height: 48px;
+        animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+        }
+
+    </style>
 </head>
 <body>
     <div class="card">
@@ -35,64 +66,66 @@
             </div>
         </div>
     </div>
+
+    <div id="loading-screen" class="card" style="background-color:black">
+        <div class="spinner"></div>
+        <p style="color:white">Loading Geofence List...</p>
+        <br>
+        <br>
+        <img src="logo.png" height="40px" width="250px" alt="">
+    </div>
 </body>
 <script>
+    var session_id = "";
+    async function getSessionid(){
+        await $.ajax({
+        url:"backend.php",
+        type:"POST",
+        data:{"data":"session"},
+        success:function(data){
+            let result = JSON.parse(data);
+            session_id = result['eid'];
+        }
+    })
+    }
     
-
-    async function getGeofenceList(){
-        var settings = {
-        "url": "http://127.0.0.1:8080/https://hst-api.wialon.com/wialon/ajax.html?svc=token/login&params={\"token\":\"62f92312f08f167f47cbc245ce2202b75E821AA9BEC688F6EBA84820AE72D64B8BCADB8D\"}",
-        "method": "POST",
-        "timeout": 0,
-        "headers": {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Cookie": "__ddg1_=DPn8hleZ0rgDgUPghp0J"
-        },
-        };
-        let sid = "";
-
-        await $.ajax(settings).done(function (response) {
-            sid = jsonata('eid').evaluate(response);
-            console.log(sid);
-
-            var settings = {
-            "url": "http://127.0.0.1:8080/https://hst-api.wialon.com/wialon/ajax.html?svc=core/search_items&params={\"spec\":{\"itemsType\":\"avl_resource\",\"propName\":\"zones_library,sys_id\",    \"propType\":\"propitemname\",\"propValueMask\":\"*\",\"sortType\":\"sys_name\"},\"force\":4,\"flags\":4097,\"from\":0,\"to\":0}&sid="+sid,
-            "method": "POST",
-            "timeout": 0,
-            "headers": {
-                "Cookie": "__ddg1_=DPn8hleZ0rgDgUPghp0J"
-            },
-            };
-
-            $.ajax(settings).done(function (response) {
-                console.log(response);
-                // Get count of geofences
-                
-                let count               = jsonata('$count($spread(items[0].zl))').evaluate(response);
-                let listOfGeofenceIds   = jsonata('$spread($keys(items[0].zl))').evaluate(response);
-                let maxGeofenceId       = listOfGeofenceIds[count-1];
-                let nameArray       = [];
-                let idArray         = [];
-                let geofenceArray   = [];
+   async function getListOfGeofences(){
+    await getSessionid();
+    $.ajax({
+        url:"backend.php",
+        type:"POST",
+        data:{"data":"getGeofenceList","session_id":session_id},
+        success:function(data){
+            let response = JSON.parse(data);
+            let count               = jsonata('$count($spread(items[0].zl))').evaluate(response);
+            let listOfGeofenceIds   = jsonata('$spread($keys(items[0].zl))').evaluate(response);
+            let maxGeofenceId       = listOfGeofenceIds[count-1];
+            let nameArray       = [];
+            let idArray         = [];
+            let geofenceArray   = [];
 
                 for(i=0;i<=maxGeofenceId;i++){
-                    // Name
+
                     let name = jsonata('items[0].zl."'+i+'".n').evaluate(response);
-                    // Id
                     let id = jsonata('items[0].zl."'+i+'".id').evaluate(response);
-                    // nameArray.push(name);
-                    // idArray.push(id);
                     if(name!=undefined && id!=undefined){
                         geofenceArray.push([name,id]);
                     }
                 }
-                let table = $('#geofenceTable').DataTable();
+                let table = $('#geofenceTable').DataTable({
+                    order: [
+                    [1, "desc"]
+                ]
+                });
                 table.rows.add(geofenceArray).draw();
-            });
-        });
-    }
-    
-    getGeofenceList();
+                $("#loading-screen").hide()
+        }
+    });
+   }
+
+   getListOfGeofences();
+
+
 
 </script>
 </html>
